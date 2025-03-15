@@ -74,6 +74,18 @@ python inference.py
 推断参数一览（默认值可在inference.py中查阅）
 
 ```she
+options:
+  -h, --help            show this help message and exit
+  --in_channels IN_CHANNELS
+                        影像通道，默认为灰阶影像
+  --infer_set INFER_SET
+                        需推断数据集位置
+  --infer_result INFER_RESULT
+                        输出结果路径
+  --model_name MODEL_NAME
+                        generator model epoch name：模型名称
+  --upscale_factor {2,4,8}
+                        super resolution upscale factor：超分辨率放大因子，默认为4
 ```
 
 
