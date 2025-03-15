@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from utils.ssim import ssim
-from utils.dataset import TrainDatasetFromFolder, TestDatasetFromFolder, display_transform
+from utils.dataset import TrainDatasetFromFolder, ValDatasetFromFolder, display_transform
 from model.loss import GeneratorLoss, TVLoss
 from model.model import Generator, Discriminator
 
@@ -32,8 +32,8 @@ def args():
                                                                               'percentage of total epochs')
     parser.add_argument("--lr_scheduler_gamma", type=float, default=0.1)
     parser.add_argument('--num_epochs', default=50, type=int, help='train epoch number')
-    parser.add_argument('--test_set', default='data/nii/test', type=str, help='test set path')
-    parser.add_argument('--test_result', default='statistics', type=str, help='test result path')
+    parser.add_argument('--val_set', default='data/nii/val', type=str, help='val set path')
+    parser.add_argument('--val_result', default='statistics', type=str, help='val result path')
     parser.add_argument('--train_record', default='runs', type=str, help='training records path')
     parser.add_argument('--train_set', default='data/nii/train', type=str, help='training set path')
     parser.add_argument('--upscale_factor', default=4, type=int, choices=[2, 4, 8],
@@ -50,18 +50,18 @@ if __name__ == '__main__':
     # 全局变量定义
     NUM_CHANNELS = opt.in_channels
     TRAINING_SET = opt.train_set
-    TESTING_SET = opt.test_set
-    TESTING_RECORDS = opt.test_result
+    TESTING_SET = opt.val_set
+    TESTING_RECORDS = opt.val_result
     RECORDING_PATH = opt.train_record
     MODEL_PATH = opt.model_weights
     # 加载数据
     train_set = TrainDatasetFromFolder(dataset_dir=f"{TRAINING_SET}",
                                        crop_size=opt.crop_size,
                                        upscale_factor=opt.upscale_factor)
-    test_set = TestDatasetFromFolder(dataset_dir=f"{TESTING_SET}",
-                                     upscale_factor=opt.upscale_factor)
+    val_set = ValDatasetFromFolder(dataset_dir=f"{TESTING_SET}",
+                                    upscale_factor=opt.upscale_factor)
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=opt.batch_size, shuffle=True)
-    test_loader = DataLoader(dataset=test_set, num_workers=4, batch_size=1, shuffle=False)
+    val_loader = DataLoader(dataset=val_set, num_workers=4, batch_size=1, shuffle=False)
     # 加载模型
     netG = Generator(opt.upscale_factor, in_channels=NUM_CHANNELS)
     print('# generator parameters:', sum(param.numel() for param in netG.parameters()))
@@ -150,39 +150,39 @@ if __name__ == '__main__':
         schedulerD.step()
 
         with torch.no_grad():
-            test_bar = tqdm(test_loader)
-            testing_results = {'mse': 0, 'ssims': 0, 'psnr': 0, 'ssim': 0, 'batch_sizes': 0}
-            test_images = []
-            for test_lr, test_hr_restore, test_hr in test_bar:
-                batch_size = test_lr.size(0)
-                testing_results['batch_sizes'] += batch_size
-                lr = test_lr
-                hr = test_hr
+            val_bar = tqdm(val_loader)
+            valid_results = {'mse': 0, 'ssims': 0, 'psnr': 0, 'ssim': 0, 'batch_sizes': 0}
+            val_images = []
+            for val_lr, val_hr_restore, val_hr in val_bar:
+                batch_size = val_lr.size(0)
+                valid_results['batch_sizes'] += batch_size
+                lr = val_lr
+                hr = val_hr
                 if torch.cuda.is_available():
                     lr = lr.float().cuda()
                     hr = hr.float().cuda()
                 sr = netG(lr)
 
                 batch_mse = ((sr - hr) ** 2).data.mean()
-                testing_results['mse'] += batch_mse * batch_size
+                valid_results['mse'] += batch_mse * batch_size
                 batch_ssim = ssim(sr, hr).item()
-                testing_results['ssims'] += batch_ssim * batch_size
-                testing_results['psnr'] = 10 * log10(
-                    (hr.max() ** 2) / (testing_results['mse'] / testing_results['batch_sizes']))
-                testing_results['ssim'] = testing_results['ssims'] / testing_results['batch_sizes']
-                test_bar.set_description(
+                valid_results['ssims'] += batch_ssim * batch_size
+                valid_results['psnr'] = 10 * log10(
+                    (hr.max() ** 2) / (valid_results['mse'] / valid_results['batch_sizes']))
+                valid_results['ssim'] = valid_results['ssims'] / valid_results['batch_sizes']
+                val_bar.set_description(
                     desc='[converting LR images to SR images] PSNR: %.4f dB SSIM: %.4f' % (
-                        testing_results['psnr'], testing_results['ssim']))
+                        valid_results['psnr'], valid_results['ssim']))
 
-                test_images.extend(
-                    [display_transform()(test_hr_restore.squeeze(0)), display_transform()(hr.data.cpu().squeeze(0)),
+                val_images.extend(
+                    [display_transform()(val_hr_restore.squeeze(0)), display_transform()(hr.data.cpu().squeeze(0)),
                      display_transform()(sr.data.cpu().squeeze(0))])
-            test_images = torch.stack(test_images)
-            test_images = torch.chunk(test_images, test_images.size(0) // 14)
-            test_save_bar = tqdm(test_images,
+            val_images = torch.stack(val_images)
+            val_images = torch.chunk(val_images, val_images.size(0) // 14)
+            val_save_bar = tqdm(val_images,
                                  desc=f'[{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} saving training results]')
             index = 1
-            for image in test_save_bar:
+            for image in val_save_bar:
                 if index % 20 == 0:
                     image = utils.make_grid(image, nrow=3, padding=5)
                     utils.save_image(image, out_path + 'epoch_%d_index_%d.png' % (epoch, index), padding=5)
@@ -198,8 +198,8 @@ if __name__ == '__main__':
         results['g_loss'].append(running_results['g_loss'] / running_results['batch_sizes'])
         results['d_score'].append(running_results['d_score'] / running_results['batch_sizes'])
         results['g_score'].append(running_results['g_score'] / running_results['batch_sizes'])
-        results['psnr'].append(testing_results['psnr'])
-        results['ssim'].append(testing_results['ssim'])
+        results['psnr'].append(valid_results['psnr'])
+        results['ssim'].append(valid_results['ssim'])
 
         if epoch % 10 == 0 and epoch != 0:
             out_path = TESTING_RECORDS
@@ -213,4 +213,4 @@ if __name__ == '__main__':
             best_epoch = data_frame.loc[:,'Loss_G'].idxmin() - 1
             min_loss = data_frame.loc[best_epoch + 1, 'Loss_G']
             shutil.copy(f"{MODEL_PATH}/netG_{opt.upscale_factor}x_epoch_{best_epoch}.pth",
-                        f"{MODEL_PATH}/netG_best_performance_lossG_{min_loss:.2e}.pth")
+                        f"{MODEL_PATH}/netG_best_{opt.upscale_factor}x_performance_lossG_{min_loss:.2e}.pth")
