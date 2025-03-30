@@ -59,7 +59,7 @@ if __name__ == '__main__':
                                        crop_size=opt.crop_size,
                                        upscale_factor=opt.upscale_factor)
     val_set = ValDatasetFromFolder(dataset_dir=f"{TESTING_SET}",
-                                    upscale_factor=opt.upscale_factor)
+                                   upscale_factor=opt.upscale_factor)
     train_loader = DataLoader(dataset=train_set, num_workers=4, batch_size=opt.batch_size, shuffle=True)
     val_loader = DataLoader(dataset=val_set, num_workers=4, batch_size=1, shuffle=False)
     # 加载模型

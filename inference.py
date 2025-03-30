@@ -16,7 +16,7 @@ def args():
     parser.add_argument('--in_channels', default=1, type=int, help='影像通道，默认为灰阶影像')
     parser.add_argument('--infer_set', default='data/nii/infer', type=str, help='需推断数据集位置')
     parser.add_argument('--infer_result', default='data/infer', type=str, help='输出结果路径')
-    parser.add_argument('--model_name', default='weights/netG_best_4x_performance_lossG_5.05e-03.pth',
+    parser.add_argument('--model_name', default='weights/netG_best_4x_performance_lossG_3.75e-03.pth',
                         type=str, help='generator model epoch name：模型名称')
     parser.add_argument('--upscale_factor', default=4, type=int, choices=[2, 4, 8],
                         help='super resolution upscale factor：超分辨率放大因子，默认为4')
